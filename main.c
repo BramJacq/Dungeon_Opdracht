@@ -50,6 +50,24 @@ struct player player;
 struct monsters monster1;
 struct monsters monster2;
 
+//Ik heb beslist om met random getallen ervoor te zorgen
+//dat er 20% kans is dat er een monster in de kamer zit
+//dan is er een random getal dat 33% kans geeft dat het monster2 omdat deze heel sterk is.
+//er is 66% kans dat het het simpele monster1 is.
+void generatemonsters(struct room *r){
+    if ((rand() % 5) == 0){ //20% kans dat er een monster in de kamer aanwezig is.
+        if ((rand() % 3) == 0){
+            r -> monsterchoice = 2; //33% kans dat het monster2 is.
+        }
+        else{
+            r -> monsterchoice = 1; //66% kans dat het monster1 is.
+        }
+    }
+    else{
+    r -> monsterchoice = 0; //Geen monster in de kamer (80% kans).
+    }
+}
+
 void connectrooms(struct room* room1, struct room* room2){
     roomnode* current = room1 -> connections;
     while (current != NULL) {
@@ -96,7 +114,9 @@ dungeon* dungeoncreate(int amountofrooms){
         dungeon -> rooms[i].roomid = i;
         dungeon -> rooms[i].doors = 0;
         dungeon -> rooms[i].connections = NULL;
-        dungeon -> rooms[i].monsterchoice = rand() % 2;
+        dungeon -> rooms[i].visited = 0;
+        dungeon -> rooms[i].cleared = 0;
+        generatemonsters(&dungeon -> rooms[i]);
     }
     
     for(int i = 1; i < amountofrooms; i++){
@@ -152,34 +172,32 @@ int i = 0;
     }
 }
 
-void battle(){
+void battle(struct monsters *m){
+    printf("Watch out!! Whats that? Oh no its a %s\n",m -> name);
     //Getal voor monster battle:
-    while(monster1.health > 0 && player.health > 0){
+    while(m -> health > 0 && player.health > 0){
     number = rand() % 17;
     ToBinary(number);
     if(monsterattack == 1){
-        player.health = (player.health - monster1.damage);
-        printf("The monster attacked you! Focus Up %s! You have %d health.\n",player.name,player.health);
+        player.health -= (m -> damage);
+        printf("The %s attacked you! Focus Up %s! You have %d health.\n",m -> name,player.name,player.health);
     }
     if(playerattack == 1){
-        monster1.health = (monster1.health - player.damage);
-        printf("HIT!, Your shot landed! %s now has %d health.\n",monster1.name,monster1.health);
-    }
+        m -> health -= player.damage;
+        printf("HIT!, Your shot landed! %s now has %d health.\n",m -> name,m -> health);
+        }
     }
     //Kijken of het monster al dood is
-    if(monster1.health <= 0){
-        printf("ARGHHH, %s has been killed!\n",monster1.name);
+    if(m -> health <= 0){
+        printf("ARGHHH, %s has been killed!\n",m -> name);
+        currentroom -> cleared = 1; //Kamer is veilig.
     }
     //Kijken of player al dood is
     if(player.health <= 0){
         printf("%s Died\n",player.name);
         gameover = 1;
     }
-    if(gameover == 1){
-        printf("Game Over!");
-        return;
-    }
-    }
+}
     
     
     //chests 
@@ -198,20 +216,6 @@ void battle(){
     */
 int main(){
 srand(time(NULL));
-
-//Naam van de player vragen aan de gebruiker.
-printf("Give me the player name: \n");
-fgets(player.name,sizeof(player.name),stdin);
-player.name[strcspn(player.name, "\n")] = '\0'; //Dit is om de newline die de fgets functie genereert weg te halen als die er is.
-printf("Welcome %s, have fun in this amazing game!\n",player.name);
-
-//Health van player instellen
-player.health = 100;
-player.damage = 5;
-player.currentroomid = 1;
-
-printf("You start with %d Health \n",player.health);
-printf("You have spawned in room number %d, this is where your adventure will start\n",player.currentroomid);
 
 //dungeon generatie
 int amountofrooms;
@@ -232,6 +236,45 @@ monster1.damage = 2;
 monster2.name = "CBD-Rex";  
 monster2.health = 400;
 monster2.damage = 90;
+
+//Naam van de player vragen aan de gebruiker.
+printf("Give me the player name: \n");
+fgets(player.name,sizeof(player.name),stdin);
+player.name[strcspn(player.name, "\n")] = '\0'; //Dit is om de newline die de fgets functie genereert weg te halen als die er is.
+printf("Welcome %s, have fun in this amazing game!\n",player.name);
+
+//Health van player instellen
+player.health = 100;
+player.damage = 5;
+player.currentroomid = 1;
+
+printf("You start with %d Health \n",player.health);
+printf("You have spawned in room number %d, this is where your adventure will start\n",player.currentroomid);
+
+//Zorgen dat we alleen de verbinding van de kamer weergeven als hij veilig is
+if(currentroom -> cleared){
+    printf("This room is connected to:");
+    roomnode* node = currentroom -> connections;
+    while(node){
+        printf("%d",node -> room -> roomid);
+        node = node -> next;
+    }
+}
+
+//gevecht starten als dat nodig is:
+if(!currentroom -> cleared && currentroom -> monsterchoice){
+    switch (currentroom -> monsterchoice){
+        case1: 
+        battle(&monster1);
+        break;
+            case2: 
+            battle(&monster2);
+            break;
+    }
+    if(gameover == 1){
+        break;
+    }
+}
 
 while(!gameover){
     struct room* currentroom = &dungeon -> rooms[player.currentroomid];
@@ -254,31 +297,24 @@ while(!gameover){
     int newroom;
     printf("\nEnter room number to move to (-1 to quit): ");
     scanf("%d", &newroom);
-    if(newroom == -1) break;
-    
+
+    if(newroom == -1){
+    break;
+    }
     _Bool valid = 0;
-    node = currentroom -> connections;
-    while(node != NULL){
+    roomnode* node = currentroom -> connections;
+    while(node && !valid){
         if(node -> room -> roomid == newroom){
             valid = 1;
-            break;
+            player.currentroomid = newroom;
         }
         node = node -> next;
-    }
-    
-    if(valid){
-    player.currentroomid = newroom;
+    }  
+    if(!valid){
+        printf("Invalid room selection!\n");
     } 
-    else{
-    printf("Invalid room selection!\n");
-        }
-    }
+}
 freedungeons(dungeon);
 return 0;
 }
-
-/*//deze voorwaarden is om te testen of het werkt MOET NOG VERANDEREN!!
-int fight = 1;
-if (fight == 1){
-   battle();*/
 
