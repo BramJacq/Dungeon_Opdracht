@@ -110,6 +110,7 @@ dungeon* dungeoncreate(int amountofrooms){
     dungeon -> amountofrooms = amountofrooms;
     dungeon -> rooms = malloc(amountofrooms * sizeof(struct room));
 
+    // Initialize rooms hier geven we de kamer een id en zorgen we dat we met 0 deuren per kamer beginnen.
     for (int i = 0; i < amountofrooms; i++){
         dungeon -> rooms[i].roomid = i;
         dungeon -> rooms[i].doors = 0;
@@ -119,6 +120,7 @@ dungeon* dungeoncreate(int amountofrooms){
         generatemonsters(&dungeon -> rooms[i]);
     }
     
+    // zorgen dat we beginnen bij kamer 1 want kamer 0 is de ingang, en zoekt een willekeurige kamer om mee te verbinden
     for(int i = 1; i < amountofrooms; i++){
         int target = room_availability(dungeon, i);
         if (target == -1){
@@ -128,10 +130,11 @@ dungeon* dungeoncreate(int amountofrooms){
         }
     connectrooms(&dungeon -> rooms[i], &dungeon -> rooms[target]);
 
-    int extraconnections = rand() % 4;
+    // Add random additional connections (0-3)
+    int extraconnections = rand() % 4; //Kiest of er 0 tot 3 extra verbindingen gegenereerd gaan worden.
     for (int j = 0; j < extraconnections; j++){
     int newtarget = room_availability(dungeon, i);
-    if (newtarget != -1 && dungeon -> rooms[i].doors < 4){
+    if (newtarget != -1 && dungeon -> rooms[i].doors < 4){ //controleren dat er nog plaats is voor een extra connectie want 4 deuren is het maximum dat mag.
         connectrooms(&dungeon -> rooms[i], &dungeon -> rooms[newtarget]);
         }
     }
@@ -140,15 +143,15 @@ return dungeon;
 }
 
 void freedungeons(dungeon* dungeon){
-    for (int i = 0; i < dungeon -> amountofrooms; i++){
+    for (int i = 0; i < dungeon -> amountofrooms; i++){//hier geven we de knooppunten vrij
         roomnode* current = dungeon -> rooms[i].connections;
-        while (current != NULL) {
-            roomnode* temp = current;
+        while (current != NULL) {  //array van de kamers vrij
+            roomnode* temp = current; 
             current = current -> next;
             free(temp);
         }
     }
-    free(dungeon -> rooms);
+    free(dungeon -> rooms); //hier geven we de blueprint vrij
     free(dungeon);
 }
 //Zorgen dat we een getal om kunnen zetten in een binair getal
@@ -172,12 +175,12 @@ int i = 0;
     }
 }
 
-void battle(struct monsters *m){
+void battle(struct monsters *m, struct room *currentroom){
     printf("Watch out!! Whats that? Oh no its a %s\n",m -> name);
     //Getal voor monster battle:
     while(m -> health > 0 && player.health > 0){
     number = rand() % 17;
-    ToBinary(number);
+    ToBinary();
     if(monsterattack == 1){
         player.health -= (m -> damage);
         printf("The %s attacked you! Focus Up %s! You have %d health.\n",m -> name,player.name,player.health);
@@ -199,21 +202,6 @@ void battle(struct monsters *m){
     }
 }
     
-    
-    //chests 
-    //er moet nog een stuk komen waar we random genereren in welke kamer er een chest staat
-    /*void treasurechests(){
-    int specialitem == 0;
-        if (chest == 1){
-        
-        }
-        if (specialitem == 1){
-            printf("You found the Golden Banana, Ur the MonkeyGod now, they will do everything that needs to be done for you\n");
-            printf("You Won! Thankyou for playing %s\n",player.name);
-            return 0;
-        }
-    }
-    */
 int main(){
 srand(time(NULL));
 
@@ -246,63 +234,57 @@ printf("Welcome %s, have fun in this amazing game!\n",player.name);
 //Health van player instellen
 player.health = 100;
 player.damage = 5;
-player.currentroomid = 1;
-
-printf("You start with %d Health \n",player.health);
-printf("You have spawned in room number %d, this is where your adventure will start\n",player.currentroomid);
-
-//Zorgen dat we alleen de verbinding van de kamer weergeven als hij veilig is
-if(currentroom -> cleared){
-    printf("This room is connected to:");
-    roomnode* node = currentroom -> connections;
-    while(node){
-        printf("%d",node -> room -> roomid);
-        node = node -> next;
-    }
-}
-
-//gevecht starten als dat nodig is:
-if(!currentroom -> cleared && currentroom -> monsterchoice){
-    switch (currentroom -> monsterchoice){
-        case1: 
-        battle(&monster1);
-        break;
-            case2: 
-            battle(&monster2);
-            break;
-    }
-    if(gameover == 1){
-        break;
-    }
-}
 
 while(!gameover){
     struct room* currentroom = &dungeon -> rooms[player.currentroomid];
+    currentroom->visited = 1;
+
     printf("\nYou are in room %d\n", currentroom -> roomid);
-    printf("Connections to rooms: ");
-    roomnode* node = currentroom -> connections;
+    
+    //Zorgen dat we alleen de verbinding van de kamer weergeven als hij veilig is
+    if(currentroom -> cleared){
+        printf("Connections: ");
+        roomnode* node = currentroom -> connections;
+        while(node != NULL){
+            printf("%d ", node -> room -> roomid);
+            node = node -> next;
+        }
+    }
+
+    //gevecht starten als dat nodig is:
+    if(!currentroom -> cleared && currentroom -> monsterchoice){
+        switch(currentroom -> monsterchoice){
+            case 1: 
+                battle(&monster1, currentroom);
+                break;
+            case 2: 
+                battle(&monster2, currentroom);
+                break;
+        }
+        if(gameover == 1){
+            break;
+        }
+    }
+
+    //laat beschikbare kamers zien voor navigatie
+    printf("\nAvailable rooms: ");
+    roomnode* node = currentroom->connections;
     while(node != NULL){
-        printf("%d ", node -> room -> roomid);
-        node = node -> next;
+        printf("%d ", node->room->roomid);
+        node = node->next;
     }
-    
-    if(currentroom -> monsterchoice){
-        printf("\nA wild %s appears!\n", monster1.name);
-        battle();
-        if(gameover) break;
-        currentroom -> monsterchoice = 0;
-    }
-    
-    // Kamernavigatie
+
     int newroom;
     printf("\nEnter room number to move to (-1 to quit): ");
     scanf("%d", &newroom);
+    getchar();
 
     if(newroom == -1){
     break;
     }
+
     _Bool valid = 0;
-    roomnode* node = currentroom -> connections;
+    node = currentroom -> connections;
     while(node && !valid){
         if(node -> room -> roomid == newroom){
             valid = 1;
@@ -310,6 +292,7 @@ while(!gameover){
         }
         node = node -> next;
     }  
+    
     if(!valid){
         printf("Invalid room selection!\n");
     } 
@@ -317,4 +300,3 @@ while(!gameover){
 freedungeons(dungeon);
 return 0;
 }
-
