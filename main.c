@@ -3,6 +3,11 @@
 #include <string.h>
 #include <time.h>
 
+#define GanjaTronHealth 200
+#define CBD_RexHealth 400
+#define GanjaTronDamage 2
+#define CBD_RexDamage 5
+
 typedef struct roomnode{
     struct room* room;
     struct roomnode* next;
@@ -51,11 +56,11 @@ struct monsters monster1;
 struct monsters monster2;
 
 //Ik heb beslist om met random getallen ervoor te zorgen
-//dat er 20% kans is dat er een monster in de kamer zit
+//dat er 25% kans is dat er een monster in de kamer zit
 //dan is er een random getal dat 33% kans geeft dat het monster2 omdat deze heel sterk is.
 //er is 66% kans dat het het simpele monster1 is.
 void generatemonsters(struct room *r){
-    if ((rand() % 5) == 0){ //20% kans dat er een monster in de kamer aanwezig is.
+    if ((rand() % 4) == 0){ //25% kans dat er een monster in de kamer aanwezig is.
         if ((rand() % 3) == 0){
             r -> monsterchoice = 2; //33% kans dat het monster2 is.
         }
@@ -64,9 +69,10 @@ void generatemonsters(struct room *r){
         }
     }
     else{
-    r -> monsterchoice = 0; //Geen monster in de kamer (80% kans).
+    r -> monsterchoice = 0; //Geen monster in de kamer (75% kans).
     }
 }
+
 
 void connectrooms(struct room* room1, struct room* room2){
     roomnode* current = room1 -> connections;
@@ -199,11 +205,27 @@ void battle(struct monsters *m, struct room *currentroom){
     if(player.health <= 0){
         printf("%s Died\n",player.name);
         gameover = 1;
+        return;
+    }
+    if(currentroom -> cleared == 1){
+        printf("You were able to eat its organs and got 100 extra health!\n");
+        player.health += 100;
+        printf("You now have %d health points.\n",player.health);
     }
 }
     
 int main(){
 srand(time(NULL));
+
+//Naam van de player vragen aan de gebruiker.
+printf("Give me the player name: \n");
+fgets(player.name,sizeof(player.name),stdin);
+player.name[strcspn(player.name, "\n")] = '\0'; //Dit is om de newline die de fgets functie genereert weg te halen als die er is.
+printf("Welcome %s, have fun in this amazing game!\n",player.name);
+
+//Health van player instellen
+player.health = 100;
+player.damage = 5;
 
 //dungeon generatie
 int amountofrooms;
@@ -218,29 +240,18 @@ player.currentroomid = 0; //Start in de eerste kamer
 
 //Monster 1
 monster1.name = "GanjaTron";
-monster1.health = 200;
-monster1.damage = 2;
+monster1.health = GanjaTronHealth;
+monster1.damage = GanjaTronDamage;
 //Monster 2
 monster2.name = "CBD-Rex";  
-monster2.health = 400;
-monster2.damage = 90;
-
-//Naam van de player vragen aan de gebruiker.
-printf("Give me the player name: \n");
-fgets(player.name,sizeof(player.name),stdin);
-player.name[strcspn(player.name, "\n")] = '\0'; //Dit is om de newline die de fgets functie genereert weg te halen als die er is.
-printf("Welcome %s, have fun in this amazing game!\n",player.name);
-
-//Health van player instellen
-player.health = 100;
-player.damage = 5;
+monster2.health = CBD_RexHealth;
+monster2.damage = CBD_RexDamage;
 
 while(!gameover){
     struct room* currentroom = &dungeon -> rooms[player.currentroomid];
     currentroom->visited = 1;
 
     printf("\nYou are in room %d\n", currentroom -> roomid);
-    
     //Zorgen dat we alleen de verbinding van de kamer weergeven als hij veilig is
     if(currentroom -> cleared){
         printf("Connections: ");
@@ -255,9 +266,11 @@ while(!gameover){
     if(!currentroom -> cleared && currentroom -> monsterchoice){
         switch(currentroom -> monsterchoice){
             case 1: 
+                monster1.health = GanjaTronHealth;
                 battle(&monster1, currentroom);
                 break;
             case 2: 
+                monster2.health = CBD_RexHealth;
                 battle(&monster2, currentroom);
                 break;
         }
@@ -296,6 +309,9 @@ while(!gameover){
     if(!valid){
         printf("Invalid room selection!\n");
     } 
+}
+if(gameover == 1){
+    return 0;
 }
 freedungeons(dungeon);
 return 0;
