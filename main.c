@@ -21,6 +21,7 @@ struct room {
     int searched;
     _Bool visited;
     _Bool cleared;
+    _Bool specialitem;
     roomnode* connections;
 };
 
@@ -111,21 +112,28 @@ int room_availability(dungeon* dungeon, int current_id){
     }
 }
 
+
 dungeon* dungeoncreate(int amountofrooms){
-    dungeon* dungeon = malloc(sizeof(dungeon));
-    dungeon -> amountofrooms = amountofrooms;
-    dungeon -> rooms = malloc(amountofrooms * sizeof(struct room));
+    dungeon* dungeon = malloc(sizeof(*dungeon));
+    dungeon->amountofrooms = amountofrooms;
+    dungeon->rooms = malloc(amountofrooms * sizeof(struct room));
 
     // Initialize rooms hier geven we de kamer een id en zorgen we dat we met 0 deuren per kamer beginnen.
-    for (int i = 0; i < amountofrooms; i++){
-        dungeon -> rooms[i].roomid = i;
-        dungeon -> rooms[i].doors = 0;
-        dungeon -> rooms[i].connections = NULL;
-        dungeon -> rooms[i].visited = 0;
-        dungeon -> rooms[i].cleared = 0;
-        generatemonsters(&dungeon -> rooms[i]);
+    for (int i = 0; i < amountofrooms; i++) {
+        dungeon->rooms[i].roomid = i;
+        dungeon->rooms[i].doors = 0;
+        dungeon->rooms[i].connections = NULL;
+        dungeon->rooms[i].visited = 0;
+        dungeon->rooms[i].cleared = 0;
+        dungeon->rooms[i].searched = 0;
+        dungeon->rooms[i].specialitem = 0;
+        // Generate monsters for this room
+        generatemonsters(&dungeon->rooms[i]);
     }
-    
+    //specialitem in random kamer laten voorkomen.
+        int endroom = rand() % amountofrooms;
+        dungeon->rooms[endroom].specialitem = 1;
+
     // zorgen dat we beginnen bij kamer 1 want kamer 0 is de ingang, en zoekt een willekeurige kamer om mee te verbinden
     for(int i = 1; i < amountofrooms; i++){
         int target = room_availability(dungeon, i);
@@ -181,6 +189,46 @@ int i = 0;
     }
 }
 
+void items(struct room *currentroom) {
+    if(currentroom->searched == 0){
+        currentroom->searched = 1;
+        
+        if(currentroom->specialitem) {
+            printf("\nYou found the GOLDEN BANANA!\n");
+            printf("You win!! You are the MonkeyGod now, they will do the rest of the work for you!\n");
+            gameover = 1;
+            return;
+        }
+        if(rand() % 4 == 0) { // 25% kans op item
+            int item_type = rand() % 3;
+            
+            switch(item_type) {
+                case 0: { // Health potion geeft je 20 tot 50 meer health
+                    int heal = 20 + rand() % 31;
+                    player.health += heal;
+                    printf("\nYou found a health potion! +%d health!\n", heal);
+                    printf("You now have %d health\n", player.health);
+                    break;
+                }
+                case 1: { // Zwaard
+                    int original_damage = player.damage; //verhoogt playerdamage *2
+                    player.damage *= 2;
+                    printf("\nYou found a banana sword! ");
+                    printf("Damage increased from %d to %d!\n", original_damage, player.damage);
+                    break;
+                }
+                case 2: { // Lego
+                    int damage = 20 + rand() % 31;
+                    player.health -= damage;
+                    printf("\nOUCH! You stepped on a Lego brick! -%d health!\n", damage);
+                    printf("You now have %d health\n", player.health);
+                    }
+                break;
+            }
+        }
+    }
+}
+
 void battle(struct monsters *m, struct room *currentroom){
     printf("Watch out!! Whats that? Oh no its a %s\n",m -> name);
     //Getal voor monster battle:
@@ -205,7 +253,6 @@ void battle(struct monsters *m, struct room *currentroom){
     if(player.health <= 0){
         printf("%s Died\n",player.name);
         gameover = 1;
-        return;
     }
     if(currentroom -> cleared == 1){
         printf("You were able to eat its organs and got 100 extra health!\n");
@@ -229,11 +276,11 @@ player.damage = 5;
 
 //dungeon generatie
 int amountofrooms;
-printf("How many rooms do you want to have in the game? (2-10): ");
+printf("How many rooms do you want to have in the game? (2-25): ");
 scanf("%d", &amountofrooms);
-if(amountofrooms < 2 || amountofrooms > 10){
+if(amountofrooms < 2 || amountofrooms > 25){
     printf("Because u are not smart enough to follow a simple instruction, i will choose the amount of rooms for you\n");
-    amountofrooms = 5;
+    amountofrooms = 10;
 }
 dungeon* dungeon = dungeoncreate(amountofrooms);
 player.currentroomid = 0; //Start in de eerste kamer
@@ -261,7 +308,13 @@ while(!gameover){
             node = node -> next;
         }
     }
-
+    //Items beheren
+    items(currentroom);
+    if(gameover == 1){
+        return 0;
+        freedungeons(dungeon);
+        break;
+    }
     //gevecht starten als dat nodig is:
     if(!currentroom -> cleared && currentroom -> monsterchoice){
         switch(currentroom -> monsterchoice){
@@ -276,6 +329,7 @@ while(!gameover){
         }
         if(gameover == 1){
             break;
+            return 0;
         }
     }
 
@@ -311,6 +365,7 @@ while(!gameover){
     } 
 }
 if(gameover == 1){
+    freedungeons(dungeon);
     return 0;
 }
 freedungeons(dungeon);
