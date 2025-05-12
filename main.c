@@ -3,10 +3,10 @@
 #include <string.h>
 #include <time.h>
 
-#define GanjaTronHealth 200
-#define CBD_RexHealth 400
-#define GanjaTronDamage 2
-#define CBD_RexDamage 5
+#define SpidermanmonkeyHealth 200
+#define GigantopithecusHealth 400
+#define SpidermanmonkeyDamage 2
+#define GigantopithecusDamage 5
 
 typedef struct roomnode{
     struct room* room;
@@ -197,6 +197,7 @@ void items(struct room *currentroom) {
             printf("\nYou found the GOLDEN BANANA!\n");
             printf("You win!! You are the MonkeyGod now, they will do the rest of the work for you!\n");
             gameover = 1;
+            remove("save.dat");
             return;
         }
         if(rand() % 4 == 0) { // 25% kans op item
@@ -261,113 +262,203 @@ void battle(struct monsters *m, struct room *currentroom){
     }
 }
     
-int main(){
-srand(time(NULL));
-
-//Naam van de player vragen aan de gebruiker.
-printf("Give me the player name: \n");
-fgets(player.name,sizeof(player.name),stdin);
-player.name[strcspn(player.name, "\n")] = '\0'; //Dit is om de newline die de fgets functie genereert weg te halen als die er is.
-printf("Welcome %s, have fun in this amazing game!\n",player.name);
-
-//Health van player instellen
-player.health = 100;
-player.damage = 5;
-
-//dungeon generatie
-int amountofrooms;
-printf("How many rooms do you want to have in the game? (2-25): ");
-scanf("%d", &amountofrooms);
-if(amountofrooms < 2 || amountofrooms > 25){
-    printf("Because u are not smart enough to follow a simple instruction, i will choose the amount of rooms for you\n");
-    amountofrooms = 10;
+// Save/load functies
+void save_game(dungeon *d, struct player *p) {
+    FILE *f = fopen("save.dat", "wb");
+    if (!f){
+    return;
+    }
+    fwrite(p, sizeof(struct player), 1, f);
+    fwrite(&d->amountofrooms, sizeof(int), 1, f);
+    
+    for (int i = 0; i < d->amountofrooms; i++) {
+        struct room *r = &d->rooms[i];
+        fwrite(r, sizeof(struct room), 1, f);
+        
+        int connection_count = 0;
+        roomnode *node = r->connections;
+        while (node) {
+            connection_count++;
+            node = node->next;
+        }
+        fwrite(&connection_count, sizeof(int), 1, f);
+        
+        node = r->connections;
+        while (node) {
+            int room_id = node->room->roomid;
+            fwrite(&room_id, sizeof(int), 1, f);
+            node = node->next;
+        }
+    }
+    fclose(f);
 }
-dungeon* dungeon = dungeoncreate(amountofrooms);
-player.currentroomid = 0; //Start in de eerste kamer
 
-//Monster 1
-monster1.name = "GanjaTron";
-monster1.health = GanjaTronHealth;
-monster1.damage = GanjaTronDamage;
-//Monster 2
-monster2.name = "CBD-Rex";  
-monster2.health = CBD_RexHealth;
-monster2.damage = CBD_RexDamage;
+int load_game(dungeon **d, struct player *p) {
+    FILE *f = fopen("save.dat", "rb");
+    if (!f) return 0;
 
-while(!gameover){
-    struct room* currentroom = &dungeon -> rooms[player.currentroomid];
-    currentroom->visited = 1;
-
-    printf("\nYou are in room %d\n", currentroom -> roomid);
-    //Zorgen dat we alleen de verbinding van de kamer weergeven als hij veilig is
-    if(currentroom -> cleared){
-        printf("Connections: ");
-        roomnode* node = currentroom -> connections;
-        while(node != NULL){
-            printf("%d ", node -> room -> roomid);
-            node = node -> next;
+    fread(p, sizeof(struct player), 1, f);
+    
+    int room_count;
+    fread(&room_count, sizeof(int), 1, f);
+    
+    *d = malloc(sizeof(dungeon));
+    (*d)->amountofrooms = room_count;
+    (*d)->rooms = malloc(room_count * sizeof(struct room));
+    
+    for (int i = 0; i < room_count; i++) {
+        struct room *r = &(*d)->rooms[i];
+        fread(r, sizeof(struct room), 1, f);
+        r->connections = NULL;
+        
+        int connection_count;
+        fread(&connection_count, sizeof(int), 1, f);
+        
+        for (int j = 0; j < connection_count; j++) {
+            int target_id;
+            fread(&target_id, sizeof(int), 1, f);
+            
+            roomnode *new_node = malloc(sizeof(roomnode));
+            new_node->room = &(*d)->rooms[target_id];
+            new_node->next = r->connections;
+            r->connections = new_node;
         }
     }
-    //Items beheren
-    items(currentroom);
-    if(gameover == 1){
-        return 0;
-        freedungeons(dungeon);
-        break;
-    }
-    //gevecht starten als dat nodig is:
-    if(!currentroom -> cleared && currentroom -> monsterchoice){
-        switch(currentroom -> monsterchoice){
-            case 1: 
-                monster1.health = GanjaTronHealth;
-                battle(&monster1, currentroom);
-                break;
-            case 2: 
-                monster2.health = CBD_RexHealth;
-                battle(&monster2, currentroom);
-                break;
+    fclose(f);
+    return 1;
+}
+
+int main(){
+    srand(time(NULL));
+    dungeon* dungeon = NULL;
+
+    // Check voor bestaande save
+    FILE *test = fopen("save.dat", "rb");
+    if (test) {
+        fclose(test);
+        printf("Saved game found. Load? (1=Yes, 0=No): ");
+        int choice;
+        scanf("%d", &choice);
+        // Input buffer leegmaken
+        while(getchar() != '\n');
+
+        if (choice == 1) {
+            if (!load_game(&dungeon, &player)) {
+                printf("Failed to load save. Starting new game.\n");
+            }
         }
+    }
+
+    if (!dungeon) {        
+        //Naam van de player vragen aan de gebruiker.
+        printf("Give me the player name: ");
+        fgets(player.name,sizeof(player.name),stdin);
+        player.name[strcspn(player.name, "\n")] = '\0'; //Newline verwijderen
+        printf("Welcome %s, have fun in this amazing game!\n",player.name);
+
+        //Health van player instellen
+        player.health = 100;
+        player.damage = 5;
+
+        //dungeon generatie
+        int amountofrooms;
+        printf("How many rooms do you want to have in the game? (2-25): ");
+        scanf("%d", &amountofrooms);
+        // Buffer leegmaken na number input
+        while(getchar() != '\n');
+        
+        if(amountofrooms < 2 || amountofrooms > 25){
+            printf("Because u are not smart enough to follow a simple instruction, i will choose the amount of rooms for you\n");
+            amountofrooms = 10;
+        }
+        dungeon = dungeoncreate(amountofrooms);
+        player.currentroomid = 0; //Start in de eerste kamer
+    }
+
+    //Monster 1
+    monster1.name = "Spidermanmonkey";
+    monster1.health = SpidermanmonkeyHealth;
+    monster1.damage = SpidermanmonkeyDamage;
+    //Monster 2
+    monster2.name = "Gigantopithecus";  
+    monster2.health = GigantopithecusHealth;
+    monster2.damage = GigantopithecusDamage;
+
+    while(!gameover){
+        struct room* currentroom = &dungeon -> rooms[player.currentroomid];
+        currentroom->visited = 1;
+
+        printf("You are in room %d\n", currentroom -> roomid);
+        //Zorgen dat we alleen de verbinding van de kamer weergeven als hij veilig is
+        if(currentroom -> cleared){
+            printf("Connections: ");
+            roomnode* node = currentroom -> connections;
+            while(node != NULL){
+                printf("%d ", node -> room -> roomid);
+                node = node -> next;
+            }
+        }
+        //Items beheren
+        items(currentroom);
         if(gameover == 1){
-            break;
+            freedungeons(dungeon);
             return 0;
         }
-    }
-
-    //laat beschikbare kamers zien voor navigatie
-    printf("\nAvailable rooms: ");
-    roomnode* node = currentroom->connections;
-    while(node != NULL){
-        printf("%d ", node->room->roomid);
-        node = node->next;
-    }
-
-    int newroom;
-    printf("\nEnter room number to move to (-1 to quit): ");
-    scanf("%d", &newroom);
-    getchar();
-
-    if(newroom == -1){
-    break;
-    }
-
-    _Bool valid = 0;
-    node = currentroom -> connections;
-    while(node && !valid){
-        if(node -> room -> roomid == newroom){
-            valid = 1;
-            player.currentroomid = newroom;
+        //gevecht starten als dat nodig is:
+        if(!currentroom -> cleared && currentroom -> monsterchoice){
+            switch(currentroom -> monsterchoice){
+                case 1: 
+                    monster1.health = SpidermanmonkeyHealth;
+                    battle(&monster1, currentroom);
+                    break;
+                case 2: 
+                    monster2.health = GigantopithecusHealth;
+                    battle(&monster2, currentroom);
+                    break;
+            }
+            if(gameover == 1){
+                break;
+            }
         }
-        node = node -> next;
-    }  
+
+        //laat beschikbare kamers zien voor navigatie
+        printf("\nAvailable rooms: ");
+        roomnode* node = currentroom->connections;
+        while(node != NULL){
+            printf("%d ", node->room->roomid);
+            node = node->next;
+        }
+
+        char input[10];
+        printf("\nEnter room number to move to (-1 to quit, 'save' to save): ");
+        fgets(input, sizeof(input), stdin);
+        input[strcspn(input, "\n")] = '\0';
+
+        if(strcmp(input, "save") == 0) {
+            save_game(dungeon, &player);
+            printf("Game saved!\n");
+            continue;
+        }
+
+        int newroom = atoi(input);
+        if(newroom == -1) break;
+
+        _Bool valid = 0;
+        node = currentroom -> connections;
+        while(node && !valid){
+            if(node -> room -> roomid == newroom){
+                printf("%s is leaving room %d and going to room %d\n",player.name,player.currentroomid,newroom);
+                valid = 1;
+                player.currentroomid = newroom;
+            }
+            node = node -> next;
+        }  
+        
+        if(!valid){
+            printf("Invalid room selection!\n");
+        } 
+    }
     
-    if(!valid){
-        printf("Invalid room selection!\n");
-    } 
-}
-if(gameover == 1){
     freedungeons(dungeon);
     return 0;
-}
-freedungeons(dungeon);
-return 0;
 }
