@@ -56,6 +56,40 @@ struct player player;
 struct monsters monster1;
 struct monsters monster2;
 
+typedef void (*MonsterGenerator)(struct room*);
+typedef void (*BattleHandler)(struct monsters*, struct room*);
+typedef void (*ItemHandler)(struct room*);
+
+MonsterGenerator generate_monsters = &generatemonsters;
+BattleHandler battle_handler = &battle;
+
+void handle_health_potion(struct room *r) {
+    int heal = 20 + rand() % 31;
+    player.health += heal;
+    printf("\nYou found a health potion! +%d health!\n", heal);
+    printf("You now have %d health\n", player.health);
+}
+
+void handle_sword(struct room *r) {
+    int original_damage = player.damage;
+    player.damage *= 2;
+    printf("\nYou found a banana sword! ");
+    printf("Damage increased from %d to %d!\n", original_damage, player.damage);
+}
+
+void handle_lego(struct room *r) {
+    int damage = 20 + rand() % 31;
+    player.health -= damage;
+    printf("\nOUCH! You stepped on a Lego brick! -%d health!\n", damage);
+    printf("You now have %d health\n", player.health);
+}
+
+ItemHandler item_handlers[3] = {
+    &handle_health_potion,
+    &handle_sword,
+    &handle_lego
+};
+
 //Ik heb beslist om met random getallen ervoor te zorgen
 //dat er 25% kans is dat er een monster in de kamer zit
 //dan is er een random getal dat 33% kans geeft dat het monster2 omdat deze heel sterk is.
@@ -128,7 +162,7 @@ dungeon* dungeoncreate(int amountofrooms){
         dungeon->rooms[i].searched = 0;
         dungeon->rooms[i].specialitem = 0;
         // Generate monsters for this room
-        generatemonsters(&dungeon->rooms[i]);
+        (*generate_monsters)(&dungeon->rooms[i]);
     }
     //specialitem in random kamer laten voorkomen.
         int endroom = rand() % amountofrooms;
@@ -168,6 +202,7 @@ void freedungeons(dungeon* dungeon){
     free(dungeon -> rooms); //hier geven we de blueprint vrij
     free(dungeon);
 }
+
 //Zorgen dat we een getal om kunnen zetten in een binair getal
 void ToBinary(){
 int binarynumber[10];
@@ -202,47 +237,31 @@ void items(struct room *currentroom) {
         }
         if(rand() % 4 == 0) { // 25% kans op item
             int item_type = rand() % 3;
-            
-            switch(item_type) {
-                case 0: { // Health potion geeft je 20 tot 50 meer health
-                    int heal = 20 + rand() % 31;
-                    player.health += heal;
-                    printf("\nYou found a health potion! +%d health!\n", heal);
-                    printf("You now have %d health\n", player.health);
-                    break;
-                }
-                case 1: { // Zwaard
-                    int original_damage = player.damage; //verhoogt playerdamage *2
-                    player.damage *= 2;
-                    printf("\nYou found a banana sword! ");
-                    printf("Damage increased from %d to %d!\n", original_damage, player.damage);
-                    break;
-                }
-                case 2: { // Lego
-                    int damage = 20 + rand() % 31;
-                    player.health -= damage;
-                    printf("\nOUCH! You stepped on a Lego brick! -%d health!\n", damage);
-                    printf("You now have %d health\n", player.health);
-                    }
-                break;
-            }
+            (*item_handlers[item_type])(currentroom);
         }
     }
 }
 
+void handle_player_attack(struct monsters *m, struct room *r) {
+    m->health -= player.damage;
+    printf("HIT!, Your shot landed! %s now has %d health.\n",m->name,m->health);
+}
+
+void handle_monster_attack(struct monsters *m, struct room *r) {
+    player.health -= (m->damage);
+    printf("The %s attacked you! Focus Up %s! You have %d health.\n",m->name,player.name,player.health);
+}
+
 void battle(struct monsters *m, struct room *currentroom){
     printf("Watch out!! Whats that? Oh no its a %s\n",m -> name);
-    //Getal voor monster battle:
     while(m -> health > 0 && player.health > 0){
     number = rand() % 17;
     ToBinary();
     if(monsterattack == 1){
-        player.health -= (m -> damage);
-        printf("The %s attacked you! Focus Up %s! You have %d health.\n",m -> name,player.name,player.health);
+        handle_monster_attack(m, currentroom);
     }
     if(playerattack == 1){
-        m -> health -= player.damage;
-        printf("HIT!, Your shot landed! %s now has %d health.\n",m -> name,m -> health);
+        handle_player_attack(m, currentroom);
         }
     }
     //Kijken of het monster al dood is
@@ -409,11 +428,11 @@ int main(){
             switch(currentroom -> monsterchoice){
                 case 1: 
                     monster1.health = SpidermanmonkeyHealth;
-                    battle(&monster1, currentroom);
+                    (*battle_handler)(&monster1, currentroom);
                     break;
                 case 2: 
                     monster2.health = GigantopithecusHealth;
-                    battle(&monster2, currentroom);
+                    (*battle_handler)(&monster2, currentroom);
                     break;
             }
             if(gameover == 1){
