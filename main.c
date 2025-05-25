@@ -59,9 +59,11 @@ struct monsters monster2;
 typedef void (*MonsterGenerator)(struct room*);
 typedef void (*BattleHandler)(struct monsters*, struct room*);
 typedef void (*ItemHandler)(struct room*);
+void generatemonsters(struct room *r);
+void battle(struct monsters *m, struct room *currentroom);
 
-MonsterGenerator generate_monsters = &generatemonsters;
-BattleHandler battle_handler = &battle;
+MonsterGenerator generate_monsters;
+BattleHandler battle_handler;
 
 void handle_health_potion(struct room *r) {
     int heal = 20 + rand() % 31;
@@ -367,7 +369,8 @@ int main(){
             }
         }
     }
-
+    generate_monsters = &generatemonsters;
+    battle_handler = &battle;
     if (!dungeon) {        
         //Naam van de player vragen aan de gebruiker.
         printf("Give me the player name: ");
